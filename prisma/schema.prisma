@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum TaskCategory {
+  WORK
+  SKILL
+  HEALTH
+  PERSONAL
+}
+
+enum TaskStatus {
+  TODO
+  DOING
+  DONE
+}
+
+enum KpiUnit {
+  MINUTES
+  COUNT
+}
+
+enum TemplateFrequency {
+  DAILY
+  WEEKLY
+}
+
+enum HabitFrequency {
+  DAILY
+  WEEKLY
+}
+
+enum ActivityType {
+  STUDY
+  WORKOUT
+  DEEP_WORK
+  READING
+  OTHER
+}
+
+model Task {
+  id            String        @id @default(cuid())
+  title         String
+  category      TaskCategory
+  status        TaskStatus    @default(TODO)
+  priority      Int           @default(3)
+
+  kpiTarget     Int?
+  kpiUnit       KpiUnit?
+  kpiActual     Int           @default(0)
+
+  plannedFor    DateTime      // day bucket (store any time; app normalizes to day)
+  templateId    String?
+  template      TaskTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([plannedFor])
+  @@index([status])
+  @@index([category])
+  @@index([templateId])
+}
+
+model TaskTemplate {
+  id          String            @id @default(cuid())
+  title       String
+  category    TaskCategory
+  priority    Int               @default(3)
+
+  kpiTarget   Int?
+  kpiUnit     KpiUnit?
+
+  frequency   TemplateFrequency @default(DAILY)
+  // Bitmask Mon..Sun = 1..64 (Mon=1, Tue=2, ... Sun=64). Null => every day.
+  weekDays    Int?
+  isActive    Boolean           @default(true)
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  tasks       Task[]
+}
+
+model Habit {
+  id            String         @id @default(cuid())
+  title         String
+  frequency     HabitFrequency @default(DAILY)
+  // Bitmask Mon..Sun (same rule as TaskTemplate). Null => every day.
+  weekDays      Int?
+  targetPerPeriod Int          @default(1)
+  isActive      Boolean        @default(true)
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  checks        HabitCheck[]
+}
+
+model HabitCheck {
+  id        String   @id @default(cuid())
+  habitId   String
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  day       DateTime
+  value     Int      @default(1)
+
+  createdAt DateTime @default(now())
+
+  @@unique([habitId, day])
+  @@index([day])
+}
+
+model JournalEntry {
+  id          String   @id @default(cuid())
+  day         DateTime @unique
+  wentWell    String   @default("")
+  wentWrong   String   @default("")
+  improvement String   @default("")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ActivityLog {
+  id        String       @id @default(cuid())
+  day       DateTime
+  type      ActivityType @default(OTHER)
+  minutes   Int?
+  count     Int?
+  note      String       @default("")
+
+  createdAt DateTime     @default(now())
+
+  @@index([day])
+  @@index([type])
+}
