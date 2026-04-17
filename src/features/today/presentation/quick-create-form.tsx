@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { createTask } from "./actions";
+import type { CreateTaskInput, TaskCategory } from "../domain/task";
 
 const categories = [
   { id: "WORK", label: "Work" },
@@ -13,10 +13,14 @@ const categories = [
 
 const priorities = [5, 4, 3, 2, 1] as const;
 
-export default function QuickCreateForm() {
+type Props = {
+  createTaskAction: (formData: FormData) => Promise<void>;
+};
+
+export default function QuickCreateForm({ createTaskAction }: Props) {
   const [open, setOpen] = useState(false);
-  const [category, setCategory] = useState<(typeof categories)[number]["id"]>("WORK");
-  const [priority, setPriority] = useState(3);
+  const [category, setCategory] = useState<TaskCategory>("WORK");
+  const [priority, setPriority] = useState<CreateTaskInput["priority"]>(3);
   const [showKpi, setShowKpi] = useState(false);
 
   return (
@@ -31,12 +35,10 @@ export default function QuickCreateForm() {
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-slate-900/60 p-3 backdrop-blur-sm">
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-slate-900/60 p-3 backdrop-blur-sm sm:items-center">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-800">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="font-semibold text-slate-900 dark:text-slate-100">
-                Quick add task
-              </h2>
+              <h2 className="font-semibold text-slate-900 dark:text-slate-100">Quick add task</h2>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -48,7 +50,7 @@ export default function QuickCreateForm() {
 
             <form
               action={async (formData) => {
-                await createTask(formData);
+                await createTaskAction(formData);
                 setOpen(false);
               }}
               className="mt-3 flex flex-col gap-3"
@@ -70,9 +72,9 @@ export default function QuickCreateForm() {
                       type="button"
                       onClick={() => setCategory(item.id)}
                       className={[
-                        "rounded-full px-3 py-1.5 text-sm border transition",
+                        "rounded-full border px-3 py-1.5 text-sm transition",
                         active
-                          ? "bg-violet-600 text-white border-transparent shadow"
+                          ? "border-transparent bg-violet-600 text-white shadow"
                           : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200",
                       ].join(" ")}
                     >
@@ -93,9 +95,9 @@ export default function QuickCreateForm() {
                       type="button"
                       onClick={() => setPriority(p)}
                       className={[
-                        "min-w-10 rounded-full px-3 py-1.5 text-sm border transition",
+                        "min-w-10 rounded-full border px-3 py-1.5 text-sm transition",
                         active
-                          ? "bg-amber-500 text-slate-900 border-transparent shadow-sm"
+                          ? "border-transparent bg-amber-500 text-slate-900 shadow-sm"
                           : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200",
                       ].join(" ")}
                     >
@@ -108,8 +110,8 @@ export default function QuickCreateForm() {
               <div className="flex items-center justify-between gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowKpi((v) => !v)}
-                  className="text-xs rounded-full bg-violet-50 px-2.5 py-1 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+                  onClick={() => setShowKpi((value) => !value)}
+                  className="rounded-full bg-violet-50 px-2.5 py-1 text-xs text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
                 >
                   {showKpi ? "Hide KPI" : "Add KPI"}
                 </button>

@@ -12,4 +12,3 @@ export function isoDayKey(d: Date) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
-

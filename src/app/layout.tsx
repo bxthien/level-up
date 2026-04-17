@@ -44,6 +44,9 @@ export default function RootLayout({
               <a className="hover:text-violet-600 dark:hover:text-violet-300 hover:underline transition-colors" href="/today">
                 Today
               </a>
+              <a className="hover:text-violet-600 dark:hover:text-violet-300 hover:underline transition-colors" href="/templates">
+                Templates
+              </a>
               <a className="hover:text-violet-600 dark:hover:text-violet-300 hover:underline transition-colors" href="/habits">
                 Habits
               </a>

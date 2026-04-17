@@ -1,10 +1,21 @@
-export default function DashboardPage() {
+import { getDashboardPageData } from "@/features/dashboard/application/get-dashboard-page-data";
+import DashboardPageScreen from "@/features/dashboard/presentation/dashboard-page";
+
+import { createActivityLog, deleteActivityLog } from "./actions";
+
+export default async function DashboardPage() {
+  const data = await getDashboardPageData();
+
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-blue-300/70 bg-blue-50/60 dark:border-blue-500/40 dark:bg-blue-900/20 p-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-      <p className="text-sm text-blue-800 dark:text-blue-200">
-        Next phase: day, week, and month statistics, best and worst days, average score, and progress charts.
-      </p>
-    </div>
+    <DashboardPageScreen
+      chartMaxMinutes={data.chartMaxMinutes}
+      chartMaxTasks={data.chartMaxTasks}
+      createActivityLogAction={createActivityLog}
+      deleteActivityLogAction={deleteActivityLog}
+      heatmapWeeks={data.heatmapWeeks}
+      last7Days={data.last7Days}
+      stats={data.stats}
+      todayActivityLogs={data.todayActivityLogs}
+    />
   );
 }

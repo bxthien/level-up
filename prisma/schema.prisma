@@ -48,6 +48,7 @@ model Task {
   category      TaskCategory
   status        TaskStatus    @default(TODO)
   priority      Int           @default(3)
+  sortOrder     Int           @default(0)
 
   kpiTarget     Int?
   kpiUnit       KpiUnit?
@@ -64,6 +65,7 @@ model Task {
   @@index([status])
   @@index([category])
   @@index([templateId])
+  @@index([plannedFor, status, sortOrder])
 }
 
 model TaskTemplate {

@@ -1,12 +1,6 @@
-import { prisma } from "../src/lib/db";
-import { startOfLocalDay } from "../src/lib/day";
-
-function weekDayBit(d: Date) {
-  // JS: 0=Sun..6=Sat. Our bitmask: Mon=1..Sun=64
-  const js = d.getDay();
-  const map = [64, 1, 2, 4, 8, 16, 32] as const;
-  return map[js];
-}
+import { prisma } from "../src/shared/db/prisma";
+import { startOfLocalDay } from "../src/shared/lib/day";
+import { weekDayBit } from "../src/shared/lib/recurrence";
 
 async function main() {
   const today = startOfLocalDay(new Date());
@@ -15,6 +9,12 @@ async function main() {
   const templates = await prisma.taskTemplate.findMany({
     where: { isActive: true },
   });
+
+  let sortOrderCursor =
+    ((await prisma.task.aggregate({
+      where: { plannedFor: today, status: "TODO" },
+      _max: { sortOrder: true },
+    }))._max.sortOrder ?? -1) + 1;
 
   for (const tpl of templates) {
     if (tpl.frequency === "WEEKLY") {
@@ -37,6 +37,7 @@ async function main() {
         title: tpl.title,
         category: tpl.category,
         priority: tpl.priority,
+        sortOrder: sortOrderCursor++,
         kpiTarget: tpl.kpiTarget,
         kpiUnit: tpl.kpiUnit,
         plannedFor: today,
@@ -56,4 +57,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

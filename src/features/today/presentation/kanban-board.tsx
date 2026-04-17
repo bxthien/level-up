@@ -7,38 +7,28 @@ import {
   PointerSensor,
   TouchSensor,
   closestCorners,
-  useSensor,
-  useSensors,
-  useDroppable,
+  defaultDropAnimationSideEffects,
   type DragEndEvent,
   type DragStartEvent,
-  defaultDropAnimationSideEffects,
+  useDroppable,
+  useSensor,
+  useSensors,
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
   arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { deleteTask, updateTaskActual, updateTaskStatus } from "./actions";
-
-type TaskStatus = "TODO" | "DOING" | "DONE";
-
-type TaskItem = {
-  id: string;
-  title: string;
-  category: string;
-  status: TaskStatus;
-  priority: number;
-  kpiTarget: number | null;
-  kpiUnit: string | null;
-  kpiActual: number;
-};
+import type { OrderedTaskInput, TaskStatus, TodayTask } from "../domain/task";
 
 type Props = {
-  tasks: TaskItem[];
+  tasks: TodayTask[];
+  deleteTaskAction: (formData: FormData) => Promise<void>;
+  persistTaskOrderAction: (orderedTasks: OrderedTaskInput[]) => Promise<void>;
+  updateTaskActualAction: (formData: FormData) => Promise<void>;
 };
 
 const columns: { id: TaskStatus; label: string; accent: string; bgLight: string; bgDark: string; borderLight: string; borderDark: string }[] = [
@@ -113,19 +103,25 @@ function formatKpi(unit: string | null | undefined, value: number) {
 
 function TaskCard({
   task,
+  deleteTaskAction,
   isDragging,
   onMove,
+  updateTaskActualAction,
   dragHandle,
 }: {
-  task: TaskItem;
+  task: TodayTask;
+  deleteTaskAction: (formData: FormData) => Promise<void>;
   isDragging?: boolean;
   onMove?: (id: string, status: TaskStatus) => void;
+  updateTaskActualAction: (formData: FormData) => Promise<void>;
   dragHandle?: React.ReactNode;
 }) {
   const hasKpi = task.kpiTarget != null && task.kpiUnit != null;
+  const kpiTarget = task.kpiTarget ?? 0;
+  const kpiUnit = task.kpiUnit;
   const pct =
-    hasKpi && task.kpiTarget! > 0
-      ? Math.min(100, Math.round((task.kpiActual / task.kpiTarget!) * 100))
+    hasKpi && kpiTarget > 0
+      ? Math.min(100, Math.round((task.kpiActual / kpiTarget) * 100))
       : null;
 
   const catColor = categoryColors[task.category] || categoryColors.PERSONAL;
@@ -140,11 +136,11 @@ function TaskCard({
       <div className="flex items-start gap-2">
         {dragHandle && <div className="mt-0.5 shrink-0">{dragHandle}</div>}
         <div className="flex-1">
-          <div className="font-medium text-sm text-slate-800 dark:text-slate-100">{task.title}</div>
+          <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{task.title}</div>
           <div className="mt-1.5 flex items-center gap-2">
             <span
               className={[
-                "text-[11px] rounded-full border px-2 py-0.5",
+                "rounded-full border px-2 py-0.5 text-[11px]",
                 catColor.badge,
                 catColor.darkBadge,
                 catColor.text,
@@ -164,14 +160,13 @@ function TaskCard({
         <div className="mt-2.5">
           <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
             <span>
-              KPI: {formatKpi(task.kpiUnit, task.kpiActual)} /{" "}
-              {formatKpi(task.kpiUnit, task.kpiTarget!)}
+              KPI: {formatKpi(kpiUnit, task.kpiActual)} / {formatKpi(kpiUnit, kpiTarget)}
             </span>
-            {pct != null && (
+            {pct != null ? (
               <span className="font-medium text-violet-600 dark:text-violet-400">{pct}%</span>
-            )}
+            ) : null}
           </div>
-          <div className="mt-1 h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
             <div
               className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all"
               style={{ width: `${pct ?? 0}%` }}
@@ -181,7 +176,7 @@ function TaskCard({
       ) : null}
 
       {hasKpi ? (
-        <form action={updateTaskActual} className="mt-2.5 flex items-center gap-2">
+        <form action={updateTaskActualAction} className="mt-2.5 flex items-center gap-2">
           <input type="hidden" name="id" value={task.id} />
           <input
             name="kpiActual"
@@ -195,23 +190,17 @@ function TaskCard({
         </form>
       ) : null}
 
-      <form action={deleteTask} className="mt-2">
+      <form action={deleteTaskAction} className="mt-2">
         <input type="hidden" name="id" value={task.id} />
         <button className="text-xs text-slate-500 transition hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400">
           Delete
         </button>
       </form>
 
-      {/* Mobile fallback: one-tap move without drag and drop */}
       <div className="mt-2 flex flex-wrap gap-1 sm:hidden">
         {(["TODO", "DOING", "DONE"] as const).map((next) => {
           if (next === task.status) return null;
-          const label =
-            next === "TODO"
-              ? "To Do"
-              : next === "DOING"
-                ? "Doing"
-                : "Done";
+          const label = next === "TODO" ? "To Do" : next === "DOING" ? "Doing" : "Done";
           return (
             <button
               key={next}
@@ -228,15 +217,24 @@ function TaskCard({
   );
 }
 
-function SortableTaskCard({ task, onMove }: { task: TaskItem; onMove: (id: string, status: TaskStatus) => void }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task.id });
+function SortableTaskCard({
+  task,
+  deleteTaskAction,
+  onMove,
+  updateTaskActualAction,
+}: {
+  task: TodayTask;
+  deleteTaskAction: (formData: FormData) => Promise<void>;
+  onMove: (id: string, status: TaskStatus) => void;
+  updateTaskActualAction: (formData: FormData) => Promise<void>;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+    data: {
+      type: "task",
+      task,
+    },
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -244,36 +242,79 @@ function SortableTaskCard({ task, onMove }: { task: TaskItem; onMove: (id: strin
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="touch-none"
-    >
-      <TaskCard task={task} isDragging={isDragging} onMove={onMove} dragHandle={
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          className="flex h-8 w-8 touch-none cursor-grab items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing dark:hover:bg-slate-700 dark:hover:text-slate-200"
-          aria-label="Keo de di chuyen"
-        >
-          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
-          </svg>
-        </button>
-      } />
+    <div ref={setNodeRef} style={style} className="touch-none">
+      <TaskCard
+        task={task}
+        deleteTaskAction={deleteTaskAction}
+        isDragging={isDragging}
+        onMove={onMove}
+        updateTaskActualAction={updateTaskActualAction}
+        dragHandle={
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            className="flex h-8 w-8 touch-none cursor-grab items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing dark:hover:bg-slate-700 dark:hover:text-slate-200"
+            aria-label="Drag to move"
+          >
+            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
+            </svg>
+          </button>
+        }
+      />
     </div>
+  );
+}
+
+function toOrderedPayload(items: TodayTask[]) {
+  return columns.flatMap((column) =>
+    items
+      .filter((item) => item.status === column.id)
+      .map((item, index) => ({
+        id: item.id,
+        status: item.status,
+        sortOrder: index,
+      })),
+  );
+}
+
+function applyOrderedPayload(items: TodayTask[]) {
+  const sortLookup = new Map(toOrderedPayload(items).map((item) => [item.id, item.sortOrder]));
+  return items.map((item) => ({
+    ...item,
+    sortOrder: sortLookup.get(item.id) ?? item.sortOrder,
+  }));
+}
+
+function insertAt<T>(items: T[], index: number, value: T) {
+  const next = [...items];
+  next.splice(index, 0, value);
+  return next;
+}
+
+function buildItemsFromColumns(grouped: Record<TaskStatus, TodayTask[]>) {
+  return columns.flatMap((column) =>
+    grouped[column.id].map((task, index) => ({
+      ...task,
+      status: column.id,
+      sortOrder: index,
+    })),
   );
 }
 
 function KanbanColumn({
   column,
-  tasks,
+  deleteTaskAction,
   onMove,
+  tasks,
+  updateTaskActualAction,
 }: {
   column: (typeof columns)[number];
-  tasks: TaskItem[];
+  deleteTaskAction: (formData: FormData) => Promise<void>;
   onMove: (id: string, status: TaskStatus) => void;
+  tasks: TodayTask[];
+  updateTaskActualAction: (formData: FormData) => Promise<void>;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
@@ -283,13 +324,10 @@ function KanbanColumn({
     },
   });
 
-  const columnTaskIds = tasks.map((t) => t.id);
-
   return (
-    <SortableContext items={columnTaskIds} strategy={verticalListSortingStrategy}>
+    <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
       <div
         ref={setNodeRef}
-        data-column-id={column.id}
         className={[
           "rounded-2xl border p-3 transition-colors md:min-h-[28rem]",
           column.bgLight,
@@ -300,12 +338,10 @@ function KanbanColumn({
         ].join(" ")}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h3 className={["text-sm font-semibold", column.accent].join(" ")}>
-            {column.label}
-          </h3>
+          <h3 className={["text-sm font-semibold", column.accent].join(" ")}>{column.label}</h3>
           <span
             className={[
-              "text-xs rounded-full px-2 py-0.5 font-medium",
+              "rounded-full px-2 py-0.5 text-xs font-medium",
               column.bgLight,
               column.bgDark,
               column.accent,
@@ -317,7 +353,13 @@ function KanbanColumn({
 
         <div className="flex min-h-24 flex-col gap-2.5">
           {tasks.map((task) => (
-            <SortableTaskCard key={task.id} task={task} onMove={onMove} />
+            <SortableTaskCard
+              key={task.id}
+              task={task}
+              deleteTaskAction={deleteTaskAction}
+              onMove={onMove}
+              updateTaskActualAction={updateTaskActualAction}
+            />
           ))}
 
           {tasks.length === 0 ? (
@@ -326,7 +368,7 @@ function KanbanColumn({
                 "rounded-xl border-2 border-dashed p-6 text-center text-xs opacity-70 transition-colors",
                 column.borderLight,
                 column.borderDark,
-                isOver ? "bg-white/70 dark:bg-slate-800/40 opacity-100" : "",
+                isOver ? "bg-white/70 opacity-100 dark:bg-slate-800/40" : "",
               ].join(" ")}
             >
               Drop task here
@@ -338,13 +380,18 @@ function KanbanColumn({
   );
 }
 
-export default function KanbanBoard({ tasks }: Props) {
-  const [items, setItems] = useState<TaskItem[]>(tasks);
+export default function KanbanBoard({
+  tasks,
+  deleteTaskAction,
+  persistTaskOrderAction,
+  updateTaskActualAction,
+}: Props) {
+  const [items, setItems] = useState<TodayTask[]>(applyOrderedPayload(tasks));
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
-    setItems(tasks);
+    setItems(applyOrderedPayload(tasks));
   }, [tasks]);
 
   const dropAnimation = useMemo(
@@ -376,38 +423,33 @@ export default function KanbanBoard({ tasks }: Props) {
 
   const grouped = useMemo(
     () => ({
-      TODO: items.filter((t) => t.status === "TODO"),
-      DOING: items.filter((t) => t.status === "DOING"),
-      DONE: items.filter((t) => t.status === "DONE"),
+      TODO: items.filter((task) => task.status === "TODO"),
+      DOING: items.filter((task) => task.status === "DOING"),
+      DONE: items.filter((task) => task.status === "DONE"),
     }),
     [items],
   );
 
   const activeTask = useMemo(
-    () => items.find((t) => t.id === activeId) ?? null,
+    () => items.find((task) => task.id === activeId) ?? null,
     [items, activeId],
   );
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
-  const handleDragCancel = () => {
-    setActiveId(null);
+  const persistOrder = (nextItems: TodayTask[]) => {
+    startTransition(async () => {
+      await persistTaskOrderAction(toOrderedPayload(nextItems));
+    });
   };
 
   const moveTask = (id: string, status: TaskStatus) => {
-    const moving = items.find((t) => t.id === id);
+    const moving = items.find((task) => task.id === id);
     if (!moving || moving.status === status) return;
 
-    setItems((prev) => prev.map((t) => (t.id === id ? { ...t, status } : t)));
-
-    startTransition(async () => {
-      const formData = new FormData();
-      formData.set("id", id);
-      formData.set("status", status);
-      await updateTaskStatus(formData);
-    });
+    const nextItems = applyOrderedPayload(
+      items.map((task) => (task.id === id ? { ...task, status } : task)),
+    );
+    setItems(nextItems);
+    persistOrder(nextItems);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -416,29 +458,62 @@ export default function KanbanBoard({ tasks }: Props) {
 
     if (!over) return;
 
-    const activeTaskItem = items.find((t) => t.id === active.id);
+    const activeTaskItem = items.find((task) => task.id === active.id);
     if (!activeTaskItem) return;
 
-    const overTask = items.find((t) => t.id === over.id);
+    const overTask = items.find((task) => task.id === over.id);
     const overType = over.data.current?.type;
+    const groupedItems: Record<TaskStatus, TodayTask[]> = {
+      TODO: items.filter((task) => task.status === "TODO"),
+      DOING: items.filter((task) => task.status === "DOING"),
+      DONE: items.filter((task) => task.status === "DONE"),
+    };
 
     if (overTask && overTask.status === activeTaskItem.status) {
-      const columnTasks = items.filter((t) => t.status === activeTaskItem.status);
-      const oldIndex = columnTasks.findIndex((t) => t.id === active.id);
-      const newIndex = columnTasks.findIndex((t) => t.id === over.id);
+      const columnTasks = groupedItems[activeTaskItem.status];
+      const oldIndex = columnTasks.findIndex((task) => task.id === active.id);
+      const newIndex = columnTasks.findIndex((task) => task.id === over.id);
 
       if (oldIndex !== newIndex) {
-        const newColumn = arrayMove(columnTasks, oldIndex, newIndex);
-        setItems((prev) =>
-          prev.filter((t) => t.status !== activeTaskItem.status).concat(newColumn),
-        );
+        const nextItems = buildItemsFromColumns({
+          ...groupedItems,
+          [activeTaskItem.status]: arrayMove(columnTasks, oldIndex, newIndex),
+        });
+        setItems(nextItems);
+        persistOrder(nextItems);
       }
     } else if (overTask && overTask.status !== activeTaskItem.status) {
-      const newStatus = overTask.status;
-      moveTask(active.id as string, newStatus);
+      const sourceStatus = activeTaskItem.status;
+      const targetStatus = overTask.status;
+      const sourceItems = groupedItems[sourceStatus].filter((task) => task.id !== active.id);
+      const targetItems = groupedItems[targetStatus];
+      const insertIndex = targetItems.findIndex((task) => task.id === over.id);
+
+      const nextItems = buildItemsFromColumns({
+        ...groupedItems,
+        [sourceStatus]: sourceItems,
+        [targetStatus]: insertAt(targetItems, insertIndex, {
+          ...activeTaskItem,
+          status: targetStatus,
+        }),
+      });
+      setItems(nextItems);
+      persistOrder(nextItems);
     } else if (overType === "column") {
-      const newStatus = over.id as TaskStatus;
-      moveTask(active.id as string, newStatus);
+      const sourceStatus = activeTaskItem.status;
+      const targetStatus = over.id as TaskStatus;
+      if (sourceStatus === targetStatus) return;
+
+      const nextItems = buildItemsFromColumns({
+        ...groupedItems,
+        [sourceStatus]: groupedItems[sourceStatus].filter((task) => task.id !== active.id),
+        [targetStatus]: [
+          ...groupedItems[targetStatus],
+          { ...activeTaskItem, status: targetStatus },
+        ],
+      });
+      setItems(nextItems);
+      persistOrder(nextItems);
     }
   };
 
@@ -446,8 +521,8 @@ export default function KanbanBoard({ tasks }: Props) {
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}
-      onDragStart={handleDragStart}
-      onDragCancel={handleDragCancel}
+      onDragStart={(event: DragStartEvent) => setActiveId(event.active.id as string)}
+      onDragCancel={() => setActiveId(null)}
       onDragEnd={handleDragEnd}
     >
       <section className="pb-24">
@@ -456,30 +531,32 @@ export default function KanbanBoard({ tasks }: Props) {
         </p>
 
         <div className="grid gap-4 md:grid-cols-3">
-          {columns.map((col) => {
-            return (
-              <KanbanColumn
-                key={col.id}
-                column={col}
-                tasks={grouped[col.id]}
-                onMove={moveTask}
-              />
-            );
-          })}
+          {columns.map((column) => (
+            <KanbanColumn
+              key={column.id}
+              column={column}
+              deleteTaskAction={deleteTaskAction}
+              onMove={moveTask}
+              tasks={grouped[column.id]}
+              updateTaskActualAction={updateTaskActualAction}
+            />
+          ))}
         </div>
 
         <DragOverlay dropAnimation={dropAnimation}>
           {activeTask ? (
             <div className="rotate-2 scale-105 shadow-2xl">
-              <TaskCard task={activeTask} />
+              <TaskCard
+                task={activeTask}
+                deleteTaskAction={deleteTaskAction}
+                updateTaskActualAction={updateTaskActualAction}
+              />
             </div>
           ) : null}
         </DragOverlay>
 
         {pending ? (
-          <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-            Updating status...
-          </div>
+          <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">Updating board...</div>
         ) : null}
       </section>
     </DndContext>
