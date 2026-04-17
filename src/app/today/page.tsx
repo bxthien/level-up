@@ -24,15 +24,15 @@ export default async function TodayPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Hom nay</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-violet-900 dark:text-violet-100">Today</h1>
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            {dayKey} · Hoan thanh {doneCount}/{tasks.length} · {progressPct}%
+            {dayKey} · Completed {doneCount}/{tasks.length} · {progressPct}%
           </p>
         </div>
         <div className="w-28 sm:w-40">
           <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
             <div
-              className="h-full bg-teal-500"
+              className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500"
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -42,23 +42,23 @@ export default async function TodayPage() {
       <QuickCreateForm />
 
       <section className="grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700/40 dark:bg-amber-900/20 p-2">
-          <div className="text-xs text-amber-700 dark:text-amber-200">Can lam</div>
-          <div className="text-lg font-semibold">{todoCount}</div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 dark:border-rose-700/40 dark:bg-rose-900/20 p-2">
+          <div className="text-xs text-rose-700 dark:text-rose-200">To Do</div>
+          <div className="text-lg font-semibold text-rose-900 dark:text-rose-100">{todoCount}</div>
         </div>
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50 dark:border-indigo-700/40 dark:bg-indigo-900/20 p-2">
-          <div className="text-xs text-indigo-700 dark:text-indigo-200">Dang lam</div>
-          <div className="text-lg font-semibold">{doingCount}</div>
+        <div className="rounded-xl border border-violet-200 bg-violet-50 dark:border-violet-700/40 dark:bg-violet-900/20 p-2">
+          <div className="text-xs text-violet-700 dark:text-violet-200">Doing</div>
+          <div className="text-lg font-semibold text-violet-900 dark:text-violet-100">{doingCount}</div>
         </div>
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:border-emerald-700/40 dark:bg-emerald-900/20 p-2">
-          <div className="text-xs text-emerald-700 dark:text-emerald-200">Da xong</div>
-          <div className="text-lg font-semibold">{doneCount}</div>
+          <div className="text-xs text-emerald-700 dark:text-emerald-200">Done</div>
+          <div className="text-lg font-semibold text-emerald-900 dark:text-emerald-100">{doneCount}</div>
         </div>
       </section>
 
       {tasks.length === 0 ? (
         <div className="text-sm text-zinc-600 dark:text-zinc-400">
-          Chua co task. Tao task dau tien bang nut + o goc duoi.
+          No tasks yet. Create your first task with the + button in the corner.
         </div>
       ) : (
         <KanbanBoard
@@ -77,4 +77,3 @@ export default async function TodayPage() {
     </div>
   );
 }
-
