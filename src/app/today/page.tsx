@@ -1,3 +1,5 @@
+import type { Task } from "@prisma/client";
+
 import { prisma } from "@/lib/db";
 import { endOfLocalDay, isoDayKey, startOfLocalDay } from "@/lib/day";
 
@@ -8,7 +10,7 @@ export default async function TodayPage() {
   const today = startOfLocalDay(new Date());
   const dayKey = isoDayKey(today);
 
-  const tasks = await prisma.task.findMany({
+  const tasks: Task[] = await prisma.task.findMany({
     where: {
       plannedFor: { gte: today, lte: endOfLocalDay(today) },
     },
