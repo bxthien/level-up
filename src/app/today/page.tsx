@@ -1,21 +1,30 @@
-import type { Task } from "@prisma/client";
-
 import { prisma } from "@/lib/db";
 import { endOfLocalDay, isoDayKey, startOfLocalDay } from "@/lib/day";
 
 import KanbanBoard from "./kanban-board";
 import QuickCreateForm from "./quick-create-form";
 
+type TodayTask = {
+  id: string;
+  title: string;
+  category: string;
+  status: "TODO" | "DOING" | "DONE";
+  priority: number;
+  kpiTarget: number | null;
+  kpiUnit: "MINUTES" | "COUNT" | null;
+  kpiActual: number;
+};
+
 export default async function TodayPage() {
   const today = startOfLocalDay(new Date());
   const dayKey = isoDayKey(today);
 
-  const tasks: Task[] = await prisma.task.findMany({
+  const tasks = (await prisma.task.findMany({
     where: {
       plannedFor: { gte: today, lte: endOfLocalDay(today) },
     },
     orderBy: [{ status: "asc" }, { priority: "desc" }, { createdAt: "asc" }],
-  });
+  })) as TodayTask[];
 
   const doneCount = tasks.filter((t) => t.status === "DONE").length;
   const doingCount = tasks.filter((t) => t.status === "DOING").length;
