@@ -16,6 +16,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "LevelUp",
   description: "Daily tasks, habits, and personal progress tracking.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "LevelUp",
+    statusBarStyle: "default",
+  },
 };
 
 export default function RootLayout({
